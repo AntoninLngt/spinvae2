@@ -36,3 +36,13 @@ debug_tests.py
 /tests/test_timbral_models.py
 /genembed.py
 /syncrepo.py
+
+
+dataset/
+AudioPlugins/
+venv/
+
+requirements_full_backup.txt
+*.pickle
+*.df.pickle
+synth/surge_patches_list.json

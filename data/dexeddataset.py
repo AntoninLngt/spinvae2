@@ -342,7 +342,7 @@ class DexedDataset(abstractbasedataset.PresetDataset):
         self.write_audio_render_constraints_file()
         self._delete_all_spectrogram_data()
         # multi-processed audio rendering
-        if sys.gettrace() is None:  # if No PyCharm debugger
+        if False:  # if No PyCharm debugger
             num_workers = os.cpu_count()
             split_preset_UIDs = np.array_split(self.valid_preset_UIDs, num_workers)
             with multiprocessing.Pool(num_workers) as p:  # automatically closes and joins all workers

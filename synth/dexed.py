@@ -376,9 +376,11 @@ class PresetDfDatabase(PresetDatabaseABC):
             current_UID = row['preset_UID']
             if current_UID in manual_instr_labels.keys():  # Manual high-confidence labels
                 current_labels = manual_instr_labels[current_UID]
-            else:  # Labels automatically extracted from name and HPSS
+            elif current_UID in labels_per_UID:  # Labels automatically extracted from name and HPSS
                 current_labels = labels_per_UID[current_UID]
-                if row['hpss_labels'] is not None and 'sfx' in row['hpss_labels']:
+            else:  # Extra random presets (UID >= 400000) have no labels
+                current_labels = []
+                if row['hpss_labels'] is not None and isinstance(row['hpss_labels'], str) and 'sfx' in row['hpss_labels']:
                     if 'sfx' not in current_labels:
                         current_labels.append('sfx')
             labels_str.append(current_labels)
@@ -396,7 +398,7 @@ class Dexed(synth.dexedbase.DexedCharacteristics):
     """ A Dexed (DX7) synth that can be used through RenderMan for offline wav rendering. """
 
     def __init__(self, output_Fs, render_Fs=48000,
-                 plugin_relative_path="Dexed.so",
+                 plugin_relative_path="../AudioPlugins/Dexed.so",
                  midi_note_duration_s=3.0, render_duration_s=4.0,
                  buffer_size=512, fft_size=512,
                  fadeout_duration_s=0.0,  # Default: disabled,
@@ -419,7 +421,7 @@ class Dexed(synth.dexedbase.DexedCharacteristics):
 
         self.engine = rm.RenderEngine(self.render_Fs, self.buffer_size, self.fft_size)
         with utils.text.hidden_prints(filter_stderr=True) if filter_plugin_loading_errors else contextlib.nullcontext():
-            self.engine.load_plugin(self.plugin_path)  # filter the "No protocol specified" double error msg
+            self.engine.load_plugin(self.plugin_path,0)  # filter the "No protocol specified" double error msg
 
         # A generator preset is a list of (int, float) tuples.
         self.preset_gen = rm.PatchGenerator(self.engine)  # 'RenderMan' generator
@@ -443,7 +445,7 @@ class Dexed(synth.dexedbase.DexedCharacteristics):
             audio[-fadeout_len:] = audio[-fadeout_len:] * fadeout
         if normalize:
             audio = audio * (0.99 / np.abs(audio).max())  # to prevent 16-bit conversion clipping
-        audio = librosa.resample(audio, self.render_Fs, self.reduced_Fs, res_type="kaiser_best")
+        audio = librosa.resample(audio, orig_sr=self.render_Fs, target_sr=self.reduced_Fs, res_type="kaiser_best")
         return audio, self.reduced_Fs
 
     def assign_preset(self, preset):

@@ -20,10 +20,22 @@ import librosa
 from natsort import natsorted
 
 
-__surgepy_so_path = pathlib.Path(__file__).joinpath('../../../').resolve().joinpath('AudioPlugins/surge_build')
-sys.path.append(str(__surgepy_so_path))
-import surgepy  # Must be properly built and available from the folder above
+# __surgepy_so_path = pathlib.Path(__file__).joinpath('../../../').resolve().joinpath('AudioPlugins/surge_build')
+# sys.path.append(str(__surgepy_so_path))
+# import surgepy  # Must be properly built and available from the folder above
+project_root = pathlib.Path(__file__).resolve().parent.parent 
 
+surge_path = project_root.joinpath('AudioPlugins/surge_build')
+
+if str(surge_path) not in sys.path:
+    sys.path.insert(0, str(surge_path))
+
+try:
+    import surgepy
+    #print("Surgepy successfully imported from:", surge_path)
+except ImportError as e:
+    print(f"Failed to import surgepy. Check if {surge_path} exists and contains surgepy.so")
+    raise e
 
 
 class FxBypassLevel(IntEnum):  # 0: off, 1: send, 2: send+master, 3: all
@@ -287,14 +299,14 @@ class Surge:
         s.processMultiBlock(buf, note_off_block)
 
         # downsampling, mono (careful, possible phasing effects -> L only) and return
-        buf = librosa.resample(buf[0], self.render_Fs, self.reduced_Fs, res_type="kaiser_best")
+        buf = librosa.resample(buf[0], orig_sr=self.render_Fs, target_sr=self.reduced_Fs, res_type="kaiser_best")
         return buf, self.reduced_Fs
 
 
 
 if __name__ == "__main__":
 
-    #Surge.update_patches_list()
+    Surge.update_patches_list()
 
     surge_synth = Surge()
     print(surge_synth)

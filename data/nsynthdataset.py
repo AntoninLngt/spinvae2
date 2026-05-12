@@ -246,7 +246,7 @@ class NsynthDataset(abstractbasedataset.AudioDataset):
             raise ValueError("A 'full' dataset instance must be used to generate files.")
         t_start = datetime.now()
         # Generate natural-sorted json files
-        for dataset_type in ['train', 'valid', 'test']:  # FIXME reactivate when dev is finished
+        for dataset_type in [ 'valid', 'test']:  # FIXME reactivate when dev is finished 'train',
             self._sort_examples_json(dataset_type)  # natsort and write new files
         # Delete and make an empty symlinks folder
         if self._audio_symlinks_base_dir.exists():
@@ -254,7 +254,7 @@ class NsynthDataset(abstractbasedataset.AudioDataset):
         self._init_symlinks_folder()
         # Gather data to build the instruments_info.json file and the symlinks (to access all notes from a single dir)
         instru_info = dict()  # key: UID
-        for dataset_type in ['train', 'valid', 'test']:
+        for dataset_type in ['valid', 'test']: #'train', 
             dataset_dir = self.data_storage_path.joinpath("nsynth-{}".format(dataset_type))
             with open(dataset_dir.joinpath("examples_natsorted.json"), 'r') as f:
                 examples = json.load(f)
