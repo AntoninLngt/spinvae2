@@ -42,7 +42,6 @@ dataset/
 AudioPlugins/
 venv/
 
-requirements_full_backup.txt
 *.pickle
 *.df.pickle
 synth/surge_patches_list.json
