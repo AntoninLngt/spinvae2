@@ -544,9 +544,9 @@ class AudioDataset(torch.utils.data.Dataset, ABC):
         total_duration = (datetime.now() - t_start).total_seconds()
         print(f"compute_and_store_timbre_features(...) finished ({total_duration / 3600.0:.2f} hours).")
 
-    def _compute_ac_timbre_features(self, default_midi_note_only=True, n_workers=14):
+    def _compute_ac_timbre_features(self, default_midi_note_only=True, n_workers=32):
         """ Computes AudioCommons timbres features, stores results as .json files """
-        n_workers = np.minimum(os.cpu_count() // 3, n_workers)
+        n_workers = np.minimum(int(os.cpu_count() * 0.7), n_workers)
         print("Computing AudioCommons timbral_models features...")
         t_start = datetime.now()
         self.timbre_audio_commons_storage_path.mkdir(exist_ok=True)
@@ -599,7 +599,7 @@ class AudioDataset(torch.utils.data.Dataset, ABC):
                         file_stem = self.get_audio_file_stem(preset_UID, *midi_note, variation)
                         os.symlink(original_audio_path, self.timbre_toolbox_storage_path.joinpath(file_stem + '.wav'))
         timbre_toolbox_single_dir = TimbreToolboxSingleDir(
-            self.timbre_toolbox_storage_path, n_workers=8, verbose=True)
+            self.timbre_toolbox_storage_path, n_workers=32, verbose=True)
         timbre_toolbox_single_dir.run()
 
     # ================================== Spectrograms (and spectrograms' stats) =================================

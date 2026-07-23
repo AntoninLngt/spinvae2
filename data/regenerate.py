@@ -17,7 +17,10 @@ from data import dataset
 from data.dataset import SurgeDataset, NsynthDataset, DexedDataset
 from data.abstractbasedataset import AudioDataset
 
-import synth.surge  # To re-generate the list of patches (included in the synth itself)
+try:
+    import synth.surge  # To re-generate the list of patches (included in the synth itself)
+except ImportError:
+    pass  # surgepy unavailable (OK for Dexed-only work)
 
 import utils.label
 
@@ -183,8 +186,8 @@ if __name__ == "__main__":
     #   2) Audio and spectrograms
     #   3) Additional data: labels, timbre features
 
-    gen_dexed_dataset(False, False, False, #3e True 2 fois
-                       False, False, True)
+    gen_dexed_dataset(True, True, False,  # regen_wav, regen_spectrograms, regen_learnable_presets
+                       False, False, False)  # regen_labels, regen_timbre_features, try_read_dataset
     #gen_surge_dataset(True, True, False,
     #                  True, True, True)
     #gen_nsynth_dataset(True, False,

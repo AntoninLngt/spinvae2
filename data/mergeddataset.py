@@ -13,8 +13,14 @@ import torch.utils.data
 
 from data.abstractbasedataset import AudioDataset
 from data.nsynthdataset import NsynthDataset
-from data.surgedataset import SurgeDataset
-from synth import surge
+try:
+    from data.surgedataset import SurgeDataset
+except ImportError:
+    SurgeDataset = None  # surgepy unavailable (OK for Dexed-only work)
+try:
+    from synth import surge
+except ImportError:
+    surge = None  # surgepy unavailable (OK for Dexed-only work)
 from data.dexeddataset import DexedDataset
 
 from data import sampler

@@ -27,7 +27,8 @@ import io
 import pandas as pd
 
 import synth.dexedbase
-import librenderman as rm  # A symbolic link to the actual librenderman.so must be found in the current folder
+#import librenderman as rm  # A symbolic link to the actual librenderman.so must be found in the current folder
+import synth.dawdreamer_engine as rm # DawDreamer-based replacement for librenderman
 
 import utils.text
 
@@ -398,7 +399,8 @@ class Dexed(synth.dexedbase.DexedCharacteristics):
     """ A Dexed (DX7) synth that can be used through RenderMan for offline wav rendering. """
 
     def __init__(self, output_Fs, render_Fs=48000,
-                 plugin_relative_path="../AudioPlugins/Dexed.so",
+                 #plugin_relative_path="../AudioPlugins/Dexed.so",
+                 plugin_relative_path="../AudioPlugins/Dexed.vst3",
                  midi_note_duration_s=3.0, render_duration_s=4.0,
                  buffer_size=512, fft_size=512,
                  fadeout_duration_s=0.0,  # Default: disabled,

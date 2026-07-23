@@ -20,7 +20,10 @@ import soundfile
 from natsort import natsorted
 
 from data import abstractbasedataset
-from synth import surge
+try:
+    from synth import surge
+except ImportError:
+    surge = None  # surgepy unavailable (OK for Dexed-only work)
 
 
 class SurgeDataset(abstractbasedataset.AudioDataset):
@@ -31,7 +34,7 @@ class SurgeDataset(abstractbasedataset.AudioDataset):
                  spectrogram_normalization: Optional[str] = 'min_max',
                  data_storage_root_path: Optional[str] = None,
                  random_seed=0, data_augmentation=True,
-                 fx_bypass_level=surge.FxBypassLevel.ALL,
+                 fx_bypass_level=None,  # resolved to surge.FxBypassLevel.ALL in __init__ (avoids import-time crash)
                  check_consistency=True,
                  timbre_attributes: Optional[Sequence[str]] = tuple()):
         """
@@ -46,6 +49,8 @@ class SurgeDataset(abstractbasedataset.AudioDataset):
         super().__init__(note_duration, n_fft, fft_hop, Fs, midi_notes, multichannel_stacked_spectrograms, n_mel_bins,
                          mel_fmin, mel_fmax, normalize_audio, spectrogram_min_dB, spectrogram_normalization,
                          data_storage_root_path, random_seed, data_augmentation, timbre_attributes)
+        if fx_bypass_level is None:
+            fx_bypass_level = surge.FxBypassLevel.ALL
         self._synth = surge.Surge(reduced_Fs=Fs, midi_note_duration_s=note_duration[0],
                                   render_duration_s=note_duration[0]+note_duration[1],
                                   fx_bypass_level=fx_bypass_level)  # FIXME

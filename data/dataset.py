@@ -10,13 +10,16 @@ import torch
 
 import config
 from . import dexeddataset
-from . import surgedataset
+try:
+    from . import surgedataset
+except ImportError:
+    surgedataset = None  # surgepy not installed - Surge synth unavailable (OK for Dexed-only work)
 from . import nsynthdataset
 from . import mergeddataset
 
 # ====================== Concrete dataset classes ======================
 DexedDataset = dexeddataset.DexedDataset
-SurgeDataset = surgedataset.SurgeDataset
+SurgeDataset = surgedataset.SurgeDataset if surgedataset is not None else None
 NsynthDataset = nsynthdataset.NsynthDataset
 MergedDataset = mergeddataset.MergedDataset
 # ======================================================================
