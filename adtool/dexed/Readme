@@ -1,0 +1,12 @@
+IMGEP curiosity exploration of the Dexed (DX7) preset parameter space, without SpinVAE2's
+decoder in the loop -- the "curiosity alone" baseline, to be compared against the human-preset
+dataset coverage (see spinvae2/notebooks/dexed_audit_TT_ACTM.ipynb).
+
+Theta: 155 raw Dexed VST parameters (144 learnable, 11 fixed to spinvae2 defaults).
+Rendering: DawDreamer-backed Dexed engine reused from spinvae2 (synth.dexed.Dexed), one fixed
+reference MIDI note (pitch=56, velocity=75), matching the whole spinvae2 dataset.
+Z: AudioCommons Timbral Models (ACTM) features only, computed in-process (no MATLAB) for
+speed. Full TT+ACTM (38 canonical features) is recomputed offline on discovered presets only.
+
+Requires the spinvae2 repo checked out at ~/projects/spinvae2, and (for rendering):
+  export LD_LIBRARY_PATH=/data/anasynth_nonbp/manaconda3/lib:$LD_LIBRARY_PATH

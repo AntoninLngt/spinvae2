@@ -1,0 +1,42 @@
+{
+    "experiment": {
+        "config": {
+            "save_location": "./",
+            "save_frequency": 1,
+            "bootstrap_size": 20
+        }
+    },
+    "system": {
+        "path": "adtool.examples.dexed.systems.Dexed.DexedSimulation",
+        "config": {
+            "output_Fs": 16000,
+            "midi_note_duration_s": 3.0,
+            "render_duration_s": 4.0,
+            "midi_pitch": 56,
+            "midi_velocity": 75
+        }
+    },
+    "explorer": {
+        "path": "adtool.explorers.IMGEPExplorer.IMGEPExplorer",
+        "config": {
+            "mutator": "specific",
+            "equil_time": 1,
+            "behavior_map": "adtool.examples.dexed.maps.DexedStatistics.DexedStatistics",
+            "parameter_map": "adtool.examples.dexed.maps.DexedParameterMap.DexedParameterMap",
+            "mutator_config": {},
+            "behavior_map_config": {},
+            "parameter_map_config": { "seed": 0 }
+        }
+    },
+    "input_wrappers": [],
+    "output_representations": [],
+    "logger_handlers": [],
+    "callbacks": {
+        "on_discovery": [
+            {
+                "path": "adtool.callbacks.on_discovery_callbacks.save_discovery_on_disk.SaveDiscoveryOnDisk",
+                "config": {}
+            }
+        ]
+    }
+}

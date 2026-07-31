@@ -45,3 +45,8 @@ venv/
 *.pickle
 *.df.pickle
 synth/surge_patches_list.json
+
+# adtool IMGEP run outputs (experiment data, not code)
+adtool/dexed/run_*/
+adtool/dexed/test_run/
+adtool/dexed/__pycache__/
