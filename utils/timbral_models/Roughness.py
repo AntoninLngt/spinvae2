@@ -68,7 +68,7 @@ def timbral_roughness(audio_data,
       Pad audio
     '''
     # pad audio
-    audio_samples = np.lib.pad(audio_samples, (512, 0), 'constant', constant_values=(0.0, 0.0))
+    audio_samples = np.pad(audio_samples, (512, 0), 'constant', constant_values=(0.0, 0.0))
 
     '''
       Reshape audio into time windows of 50ms.

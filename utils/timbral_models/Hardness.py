@@ -72,7 +72,7 @@ def timbral_hardness(audio_data: Dict[str, Any],
     '''
     # zero pad the signal
     nperseg = 4096  # default value for spectrogram analysis
-    audio_samples = np.lib.pad(audio_samples, (nperseg+1, 0), 'constant', constant_values=(0.0, 0.0))
+    audio_samples = np.pad(audio_samples, (nperseg+1, 0), 'constant', constant_values=(0.0, 0.0))
 
     '''
       Calculate the envelope and onsets
@@ -83,7 +83,7 @@ def timbral_hardness(audio_data: Dict[str, Any],
 
     # calculate the onsets
     original_onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs, nperseg=nperseg)
-    onset_strength = librosa.onset.onset_strength(audio_samples, fs)
+    onset_strength = librosa.onset.onset_strength(y=audio_samples, sr=fs)
     # If onsets don't exist, set it to time zero
     if not original_onsets:
         original_onsets = [0]
