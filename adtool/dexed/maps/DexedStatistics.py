@@ -8,7 +8,7 @@ import numpy as np
 from adtool.utils.leaf.Leaf import Leaf
 from adtool.utils.leaf.locators.locators import BlobLocator
 from adtool.wrappers.BoxProjector import BoxProjector
-from adtool.examples.dexed.systems.Dexed import DexedSimulation
+from systems.Dexed import DexedSimulation
 
 SPINVAE2_ROOT = os.path.expanduser("~/projects/spinvae2")
 if SPINVAE2_ROOT not in sys.path:
@@ -103,4 +103,12 @@ class DexedStatistics(Leaf):
         tt_feats = compute_tt_features(normalized, self.sample_rate)
 
         values = [ac_feats[n] for n in SELECTED_AC] + [tt_feats[n] for n in SELECTED_TT]
-        return np.array(values, dtype=np.float32)
+        embedding = np.array(values, dtype=np.float32)
+        # A handful of tt_* features (e.g. OddEvenRatio, InHarm) can divide by a near-zero
+        # denominator on degenerate-but-not-silent IMGEP presets (unlike real/human presets,
+        # which never hit this) -- utils.timbrefeatures.TimbreFeatures handles this offline via
+        # per-column median imputation fit on the whole human dataset, which isn't available for
+        # a single online discovery here. Falling back to 0.0 keeps every saved discovery finite
+        # (checkpoints, the viewer's 2D projection, and analysis modules all assume that), at the
+        # cost of losing the affected feature's value for that one discovery.
+        return np.nan_to_num(embedding, nan=0.0, posinf=0.0, neginf=0.0)
