@@ -10,3 +10,9 @@ speed. Full TT+ACTM (38 canonical features) is recomputed offline on discovered 
 
 Requires the spinvae2 repo checked out at ~/projects/spinvae2, and (for rendering):
   export LD_LIBRARY_PATH=/data/anasynth_nonbp/manaconda3/lib:$LD_LIBRARY_PATH
+
+Sizing `experiment.config.bootstrap_size` in dexed.json (random presets evaluated before IMGEP
+switches to goal-directed mutation): scale it down as the target run size grows, not a fixed
+count -- around 10% of the planned number of discoveries for runs around ~1000 (e.g. 100-200
+for a 1000-2000 run), tapering to ~1-5% for much larger runs (a fixed count is proportionally
+wasteful once you have enough of the behaviour space already explored by bootstrap alone).
