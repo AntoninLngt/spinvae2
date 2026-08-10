@@ -1,4 +1,5 @@
 import os
+import pickle
 import sys
 from copy import deepcopy
 from typing import Dict, List
@@ -6,7 +7,7 @@ from typing import Dict, List
 import numpy as np
 
 from adtool.utils.leaf.Leaf import Leaf
-from adtool.examples.dexed.systems.Dexed import DexedSimulation
+from systems.Dexed import DexedSimulation
 
 SPINVAE2_ROOT = os.path.expanduser("~/projects/spinvae2")
 if SPINVAE2_ROOT not in sys.path:
@@ -41,17 +42,60 @@ class DexedParameterMap(Leaf):
         system: DexedSimulation,
         premap_key: str = "params",
         seed: int = 0,
+        noise_scale: float = 1.0,
+        op_mode_mutation_prob: float = 0.0,
+        reflect_boundary: bool = False,
+        algorithm_mutation_prob: float = 0.0,
         **config_decorator_kwargs,
     ):
         super().__init__()
         self.premap_key = premap_key
         self.seed = seed
+        # Multiplies mutate()'s continuous-parameter noise magnitude -- see
+        # Dexed.get_similar_preset()'s docstring: `variation` itself is NOT an intensity knob
+        # (it only seeds which pseudo-random variation is drawn), so this is the actual lever
+        # for how far a mutation moves. Default 1.0 matches the original, uncalibrated-for-IMGEP
+        # behaviour (see notebook section 14).
+        self.noise_scale = noise_scale
+        # Per-operator probability of flipping the ratio/fixed OP mode switch, normally never
+        # mutated at all -- see get_similar_preset()'s docstring. Default 0.0 keeps the
+        # original behaviour; investigation notebook section 7.1 tests whether this frozen
+        # structural parameter is a bottleneck for behavioural diversity.
+        self.op_mode_mutation_prob = op_mode_mutation_prob
+        # Reflects instead of clips at the [0,1] boundary -- notebook section 3.4 found clipping
+        # caps effective displacement well below what noise_scale predicts. Default False keeps
+        # the original behaviour.
+        self.reflect_boundary = reflect_boundary
+        # Probability of a fully unconstrained algorithm jump, on top of change_algorithm_to_similar.
+        # Default 0.0 keeps the original behaviour.
+        self.algorithm_mutation_prob = algorithm_mutation_prob
         self._rng_counter = 0
+        self.learnable_indices = [i for i in range(self.N_VST_PARAMS) if i not in self.FIXED_INDICES]
+        self._dexed_helper_instance = None
 
+    @property
+    def _dexed_helper(self) -> Dexed:
         # Throwaway Dexed instance, used only for its preset-generation helpers (get_random_preset).
         # It is NOT used for rendering -- DexedSimulation owns the (heavier) rendering engine.
-        self._dexed_helper = Dexed(output_Fs=16000)
-        self.learnable_indices = [i for i in range(self.N_VST_PARAMS) if i not in self.FIXED_INDICES]
+        # Lazily built rather than eagerly loaded in __init__: adtool restores checkpoints via
+        # `cls.__new__(cls)` + `__dict__.update(state)`, bypassing __init__ entirely, and this
+        # wraps a native DawDreamer object that cannot be pickled -- see
+        # DexedSimulation.dexed_engine/checkpoint_state() for the same constraint.
+        if self._dexed_helper_instance is None:
+            self._dexed_helper_instance = Dexed(output_Fs=16000)
+        return self._dexed_helper_instance
+
+    def checkpoint_state(self) -> Dict:
+        # See DexedSimulation.checkpoint_state() -- same native-object constraint, same
+        # defensive approach (drop whatever fails to pickle rather than a hardcoded key).
+        state = {}
+        for key, value in self.__dict__.items():
+            try:
+                pickle.dumps(value)
+            except Exception:
+                value = None
+            state[key] = value
+        return state
 
     def map(self, input: Dict, override_existing: bool = True) -> Dict:
         intermed_dict = deepcopy(input)
@@ -77,7 +121,10 @@ class DexedParameterMap(Leaf):
         # parameters -- variation=1 would only change the algorithm, variation=0 is a no-op.
         mutated_array = Dexed.get_similar_preset(
             preset_array, variation=2, learnable_indices=self.learnable_indices,
-            random_seed=self.seed + self._rng_counter,
+            random_seed=self.seed + self._rng_counter, noise_scale=self.noise_scale,
+            op_mode_mutation_prob=self.op_mode_mutation_prob,
+            reflect_boundary=getattr(self, "reflect_boundary", False),
+            algorithm_mutation_prob=getattr(self, "algorithm_mutation_prob", 0.0),
         )
         mutated_preset = [(i, float(v)) for i, v in enumerate(mutated_array)]
         mutated_preset = self._apply_defaults(mutated_preset)

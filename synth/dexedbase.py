@@ -156,9 +156,39 @@ class DexedCharacteristics:
         return synth.dexedpermutations.get_algorithms_and_oscillators_permutations(algo, feedback)
 
     @staticmethod
-    def get_similar_preset(preset: np.ndarray, variation: int, learnable_indices: List[int], random_seed=0):
+    def get_similar_preset(preset: np.ndarray, variation: int, learnable_indices: List[int], random_seed=0,
+                            noise_scale: float = 1.0, op_mode_mutation_prob: float = 0.0,
+                            reflect_boundary: bool = False, algorithm_mutation_prob: float = 0.0):
         """ Data augmentation method: returns a slightly modified preset, which is (hopefully) quite similar
-            to the input preset. """
+            to the input preset.
+
+            noise_scale multiplies the continuous-parameter noise magnitude only (default 1.0, matching
+            original behaviour exactly). variation itself is NOT an intensity knob -- despite the name, it
+            only seeds which pseudo-random variation is drawn (see change_algorithm_to_similar above and the
+            "variation" column of the dataset, which enumerates several fixed-amplitude augmented copies per
+            preset); the noise formulas below never scale with its value. noise_scale was added so a caller
+            wanting an actual intensity control (e.g. an exploration algorithm's mutation strength) has one,
+            without changing get_full_preset_params()'s existing calls (which never pass it).
+
+            op_mode_mutation_prob (default 0.0, matching original behaviour exactly): per-operator
+            probability of flipping the ratio/fixed OP mode switch, normally never mutated at all
+            (considered too likely to produce inaudible/degenerate sounds for data augmentation). Exposed
+            for exploration algorithms that want to test whether this structural parameter is a bottleneck
+            for behavioural diversity -- keep small; this is a binary switch, not a graded intensity.
+
+            reflect_boundary (default False, matching original behaviour exactly): when a continuous
+            parameter's mutated value falls outside [0, 1], reflect it back into range instead of clipping
+            it to the boundary. Clipping silently discards the excess noise (a preset already near an edge
+            absorbs none of a large mutation), which was found to cap the effective displacement well below
+            what noise_scale alone would predict. Reflection ("bounce off the wall") preserves the intended
+            noise magnitude near boundaries at the cost of a slight bias in the resulting distribution's
+            shape there.
+
+            algorithm_mutation_prob (default 0.0, matching original behaviour exactly): probability of
+            replacing the FM algorithm index with a uniformly random one, on top of (independently from)
+            change_algorithm_to_similar's "similar algorithm" swap above. The algorithm parameter is
+            otherwise never freely mutated (only ever moved to a neighbouring "similar" algorithm) -- this
+            exposes a fully unconstrained categorical jump for exploration algorithms to test. """
         if variation == 0:
             return preset
         rng = np.random.default_rng((random_seed + 987654321 * variation))
@@ -173,16 +203,20 @@ class DexedCharacteristics:
         # don't choose a limited subset of param to augment, but use a <1.0 noise std
         for idx in learnable_indices:
             if idx == 4:  # algorithm
-                pass
+                if algorithm_mutation_prob > 0.0 and rng.random() < algorithm_mutation_prob:
+                    card = DexedCharacteristics.get_param_cardinality(idx)
+                    preset[idx] = rng.integers(0, card) / (card - 1.0)
             # cat params: depends
             elif idx in cat_indexes:
                 card = DexedCharacteristics.get_param_cardinality(idx)
                 # General cat params: key sync, lfo sync, lfo wave: 100% randomization
                 if idx in [6, 11, 12]:
                     preset[idx] = rng.integers(0, card) / (card - 1.0)
-                # OP mode: quite risky to change it... (likely to lead to inaudible/unlikely sounds)
+                # OP mode: quite risky to change it... (likely to lead to inaudible/unlikely sounds).
+                # Never mutated by default (op_mode_mutation_prob=0.0) -- see docstring.
                 elif idx > 32 and ((idx - 32) % 22 == 0):
-                    pass
+                    if op_mode_mutation_prob > 0.0 and rng.random() < op_mode_mutation_prob:
+                        preset[idx] = rng.integers(0, card) / (card - 1.0)
                 # L/R scales: invert lin/exp (keep +/- sign)
                 elif idx in DexedCharacteristics.get_L_R_scale_indices():
                     if preset[idx] < 0.5:
@@ -201,6 +235,11 @@ class DexedCharacteristics:
                     # Very small volume values: only positive noise
                     if idx in DexedCharacteristics.get_op_output_level_indices() and preset[idx] < 0.1:
                         noise = np.abs(noise)
-                preset[idx] += noise
+                preset[idx] += noise_scale * noise
+        if reflect_boundary:
+            # reflect repeatedly in case a large noise_scale overshoots by more than one period
+            preset = np.abs(preset)
+            preset = 1.0 - np.abs(1.0 - np.mod(preset, 2.0))
+            return preset
         return np.clip(preset, 0.0, 1.0)
 
