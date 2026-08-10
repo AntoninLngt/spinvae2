@@ -1,0 +1,40 @@
+{
+  "analysis_modules": [
+    {
+      "path": "adtool.user_tools.analysis_metrics.comparison_1d.Comparison1DModule",
+      "config": {
+        "projection": {
+          "path": "analysis_projection.identity_z_projection",
+          "config": {}
+        },
+        "dimensions": "all",
+        "plot": {
+          "points": 256,
+          "format": "png",
+          "color_a": "#4c78a8",
+          "color_b": "#54a24b",
+          "alpha": 0.35,
+          "line_width": 2.0,
+          "figsize": [7.0, 4.0]
+        }
+      }
+    },
+    {
+      "path": "adtool.user_tools.analysis_metrics.comparison_2d.Comparison2DModule",
+      "config": {
+        "projection": {
+          "path": "analysis_projection.identity_z_projection",
+          "config": {}
+        },
+        "pairs": [[0, 2], [4, 5], [6, 7]],
+        "plot": {
+          "format": "png",
+          "color_a": "#4c78a8",
+          "color_b": "#54a24b",
+          "alpha": 0.35,
+          "figsize": [7.0, 4.0]
+        }
+      }
+    }
+  ]
+}
