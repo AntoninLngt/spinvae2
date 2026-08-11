@@ -1,4 +1,5 @@
 {
+    "_comment": "STALE/UNUSED: random_2000_combined was generated via python -m adtool.user_tools.analysis_metrics.random_run.run instead, which calls parameter_map.sample() directly in a loop, bypassing IMGEPExplorer entirely. This config file (run via run_experimentations.py) would NOT produce pure random samples despite the name -- equil_time=1 means only the single bootstrap() sample is random, everything after goes through goal-directed suggest_trial()/mutate(). Kept for reference only, not used.",
     "experiment": {
         "config": {
             "save_location": "./random_2000_shard04/",
@@ -31,7 +32,9 @@
             },
             "parameter_map": {
                 "path": "maps.DexedParameterMap.DexedParameterMap",
-                "config": { "seed": 204 }
+                "config": {
+                    "seed": 204
+                }
             }
         }
     },
