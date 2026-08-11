@@ -48,6 +48,7 @@ class DexedParameterMap(Leaf):
         algorithm_mutation_prob: float = 0.0,
         big_jump_prob: float = 0.0,
         big_jump_scale: float = 8.0,
+        random_reset_prob: float = 0.0,
         **config_decorator_kwargs,
     ):
         super().__init__()
@@ -76,6 +77,14 @@ class DexedParameterMap(Leaf):
         # get_similar_preset()'s docstring. Default 0.0 keeps the original behaviour.
         self.big_jump_prob = big_jump_prob
         self.big_jump_scale = big_jump_scale
+        # NRAB-style balance (Morel et al.): per-mutation-call probability of ignoring the
+        # nearest-neighbour parent entirely and drawing a fully fresh random preset instead (the
+        # same global draw the bootstrap phase uses), rather than a small local perturbation of
+        # it. Unlike big_jump_prob (still centered on the parent, just larger), this is a
+        # genuinely unconstrained global resample -- the bootstrap-vs-goal-directed mixture
+        # continues throughout the run instead of stopping hard at equil_time/bootstrap_size.
+        # Default 0.0 keeps the original behaviour; their reported optimum is p=0.5.
+        self.random_reset_prob = random_reset_prob
         self._rng_counter = 0
         self.learnable_indices = [i for i in range(self.N_VST_PARAMS) if i not in self.FIXED_INDICES]
         self._dexed_helper_instance = None
@@ -119,11 +128,17 @@ class DexedParameterMap(Leaf):
         return {"dynamic_params": {"preset": preset}}
 
     def mutate(self, parameter_dict: Dict) -> Dict:
+        self._rng_counter += 1
+        random_reset_prob = getattr(self, "random_reset_prob", 0.0)
+        if random_reset_prob > 0.0:
+            decision_rng = np.random.default_rng(self.seed + 555555555 + self._rng_counter)
+            if decision_rng.random() < random_reset_prob:
+                return self.sample()
+
         intermed_dict = deepcopy(parameter_dict)
         preset_list = intermed_dict["dynamic_params"]["preset"]
 
         preset_array = np.array([v for _, v in preset_list], dtype=float)
-        self._rng_counter += 1
         # variation>=2 in get_similar_preset() applies random noise to (most of) the learnable
         # parameters -- variation=1 would only change the algorithm, variation=0 is a no-op.
         mutated_array = Dexed.get_similar_preset(
