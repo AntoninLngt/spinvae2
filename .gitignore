@@ -50,7 +50,7 @@ synth/surge_patches_list.json
 adtool/dexed/run_*/
 adtool/dexed/sweep_*/
 adtool/dexed/baseline_*/
-adtool/dexed/coverage_*/
+adtool/dexed/coverage/
 adtool/dexed/random_*/
 adtool/dexed/human_baseline/
 adtool/dexed/test_run/

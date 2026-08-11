@@ -43,9 +43,9 @@ print('loading baseline/algomut seeds (0-19, 200 iter each, chronological order)
 baseline_runs, algomut_runs = [], []
 for seed in range(20):
     b_dir = 'baseline_seed0_true/discoveries' if seed == 0 else (
-        f'run_2000_seed{seed}/discoveries' if seed in (1, 2) else f'coverage_baseline_seed{seed}/discoveries')
+        f'run_2000_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/baseline/seed{seed}/discoveries')
     a_dir = 'sweep_algomut/discoveries' if seed == 0 else (
-        f'sweep_algomut_seed{seed}/discoveries' if seed in (1, 2) else f'coverage_algomut_seed{seed}/discoveries')
+        f'sweep_algomut_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/algomut/seed{seed}/discoveries')
     baseline_runs.append(load_z_chronological(b_dir, cap=N_ITER))
     algomut_runs.append(load_z_chronological(a_dir, cap=N_ITER))
 

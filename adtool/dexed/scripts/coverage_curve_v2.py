@@ -38,10 +38,10 @@ print('loading baseline/algomut/bigjump seeds (0-19, 200 iter each, chronologica
 baseline_runs, algomut_runs, bigjump_runs = [], [], []
 for seed in range(20):
     b_dir = 'baseline_seed0_true/discoveries' if seed == 0 else (
-        f'run_2000_seed{seed}/discoveries' if seed in (1, 2) else f'coverage_baseline_seed{seed}/discoveries')
+        f'run_2000_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/baseline/seed{seed}/discoveries')
     a_dir = 'sweep_algomut/discoveries' if seed == 0 else (
-        f'sweep_algomut_seed{seed}/discoveries' if seed in (1, 2) else f'coverage_algomut_seed{seed}/discoveries')
-    j_dir = f'coverage_bigjump_seed{seed}/discoveries'
+        f'sweep_algomut_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/algomut/seed{seed}/discoveries')
+    j_dir = f'coverage/bigjump/seed{seed}/discoveries'
     baseline_runs.append(load_z_chronological(b_dir, cap=N_ITER))
     algomut_runs.append(load_z_chronological(a_dir, cap=N_ITER))
     bigjump_runs.append(load_z_chronological(j_dir, cap=N_ITER))
