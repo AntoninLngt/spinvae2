@@ -46,6 +46,8 @@ class DexedParameterMap(Leaf):
         op_mode_mutation_prob: float = 0.0,
         reflect_boundary: bool = False,
         algorithm_mutation_prob: float = 0.0,
+        big_jump_prob: float = 0.0,
+        big_jump_scale: float = 8.0,
         **config_decorator_kwargs,
     ):
         super().__init__()
@@ -69,6 +71,11 @@ class DexedParameterMap(Leaf):
         # Probability of a fully unconstrained algorithm jump, on top of change_algorithm_to_similar.
         # Default 0.0 keeps the original behaviour.
         self.algorithm_mutation_prob = algorithm_mutation_prob
+        # Per-mutation probability of a large basin-hopping-style jump (noise_scale x
+        # big_jump_scale for that one call) mixed into otherwise-local mutation -- see
+        # get_similar_preset()'s docstring. Default 0.0 keeps the original behaviour.
+        self.big_jump_prob = big_jump_prob
+        self.big_jump_scale = big_jump_scale
         self._rng_counter = 0
         self.learnable_indices = [i for i in range(self.N_VST_PARAMS) if i not in self.FIXED_INDICES]
         self._dexed_helper_instance = None
@@ -125,6 +132,8 @@ class DexedParameterMap(Leaf):
             op_mode_mutation_prob=self.op_mode_mutation_prob,
             reflect_boundary=getattr(self, "reflect_boundary", False),
             algorithm_mutation_prob=getattr(self, "algorithm_mutation_prob", 0.0),
+            big_jump_prob=getattr(self, "big_jump_prob", 0.0),
+            big_jump_scale=getattr(self, "big_jump_scale", 8.0),
         )
         mutated_preset = [(i, float(v)) for i, v in enumerate(mutated_array)]
         mutated_preset = self._apply_defaults(mutated_preset)

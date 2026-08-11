@@ -158,7 +158,8 @@ class DexedCharacteristics:
     @staticmethod
     def get_similar_preset(preset: np.ndarray, variation: int, learnable_indices: List[int], random_seed=0,
                             noise_scale: float = 1.0, op_mode_mutation_prob: float = 0.0,
-                            reflect_boundary: bool = False, algorithm_mutation_prob: float = 0.0):
+                            reflect_boundary: bool = False, algorithm_mutation_prob: float = 0.0,
+                            big_jump_prob: float = 0.0, big_jump_scale: float = 8.0):
         """ Data augmentation method: returns a slightly modified preset, which is (hopefully) quite similar
             to the input preset.
 
@@ -188,10 +189,23 @@ class DexedCharacteristics:
             replacing the FM algorithm index with a uniformly random one, on top of (independently from)
             change_algorithm_to_similar's "similar algorithm" swap above. The algorithm parameter is
             otherwise never freely mutated (only ever moved to a neighbouring "similar" algorithm) -- this
-            exposes a fully unconstrained categorical jump for exploration algorithms to test. """
+            exposes a fully unconstrained categorical jump for exploration algorithms to test.
+
+            big_jump_prob / big_jump_scale (default 0.0 / 8.0, matching original behaviour exactly when
+            big_jump_prob=0.0): per-call probability of multiplying noise_scale by big_jump_scale for that
+            single mutation, i.e. an occasional large basin-hopping-style step mixed into an otherwise
+            small-step (local) mutation operator. Motivated by the Vendi Score evolution curve (investigation
+            notebook section 10): diversity collapses sharply the moment IMGEP switches from global random
+            bootstrap sampling to purely local nearest-neighbour mutation, and neither noise_scale nor
+            reflect_boundary alone (uniformly scaling/unclipping every step) closed that gap. A small
+            fraction of much larger steps lets the search occasionally escape whatever local, already-
+            redundant region the 1-NN search keeps returning to, without abandoning small-step local
+            refinement for the rest. """
         if variation == 0:
             return preset
         rng = np.random.default_rng((random_seed + 987654321 * variation))
+        if big_jump_prob > 0.0 and rng.random() < big_jump_prob:
+            noise_scale = noise_scale * big_jump_scale
         # First: change algorithm to a similar one
         preset = synth.dexedpermutations.change_algorithm_to_similar(preset, variation, random_seed)
         # Then: change a few learned parameters if variation > 1: algorithm is the hardest parameter to learn,
