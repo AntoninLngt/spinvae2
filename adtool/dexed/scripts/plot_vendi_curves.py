@@ -28,6 +28,6 @@ ax.legend(fontsize=8, ncol=2)
 ax.grid(alpha=0.3)
 fig.tight_layout()
 
-out = '/net/home/u.anasynth/longeot/projects/spinvae2/adtool/dexed/vendi_score_evolution.png'
+out = '/net/home/u.anasynth/longeot/projects/spinvae2/adtool/dexed/figures/vendi_score_evolution.png'
 FigureCanvasAgg(fig).print_png(out)
 print('saved', out)

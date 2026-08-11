@@ -181,7 +181,7 @@ def main():
                  '.transform(); light grey = full human corpus backdrop; HDBSCAN clusters in native 38D)',
                  fontsize=10.5)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
-    out = 'mapping_theta_z_figure_umap_humanfit.png'
+    out = 'figures/mapping_theta_z_figure_umap_humanfit.png'
     FigureCanvasAgg(fig).print_png(out)
     print(f'saved {out}')
 

@@ -173,7 +173,7 @@ def make_figure(method):
                  f'(HDBSCAN clusters computed in 38D z-scored Z; {proj_name}; n={N_PER_METHOD} per '
                  'method; grey = HDBSCAN noise)', fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out = f'mapping_theta_z_figure_{method}.png'
+    out = f'figures/mapping_theta_z_figure_{method}.png'
     FigureCanvasAgg(fig).print_png(out)
     print(f'saved {out}')
 
