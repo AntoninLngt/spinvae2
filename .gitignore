@@ -59,6 +59,7 @@ adtool/dexed/checkpoints/
 adtool/dexed/__pycache__/
 adtool/dexed/analysis_runs/
 adtool/dexed/*.log
+adtool/dexed/logs/
 
 # JVM crash logs (accidental, from some native dependency)
 hs_err_pid*.log

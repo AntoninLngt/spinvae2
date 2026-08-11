@@ -55,12 +55,19 @@ class DexedStatistics(Leaf):
         system: DexedSimulation,
         premap_key: str = "output",
         postmap_key: str = "output",
+        silence_sink: bool = False,
     ):
         super().__init__()
         self.locator = BlobLocator()
         self.premap_key = premap_key
         self.postmap_key = postmap_key
         self.sample_rate = system.output_Fs
+        # See _calc_static_statistics: default False keeps the original behaviour (every
+        # silent/near-silent render collapses to the exact same all-zeros embedding). Set True
+        # to scatter each one to a distinct, far-away point instead -- see investigation
+        # notebook section 16/17 for why the shared zero point turned into a "silence attractor"
+        # for IMGEP's 1-NN search.
+        self.silence_sink = silence_sink
 
         self.projector = BoxProjector(premap_key=self.postmap_key)
 
@@ -72,7 +79,7 @@ class DexedStatistics(Leaf):
         intermed_dict[raw_output_key] = array
         del intermed_dict[self.premap_key]
 
-        embedding = self._calc_static_statistics(array)
+        embedding = self._calc_static_statistics(array, silence_sink=self.silence_sink)
 
         intermed_dict[self.postmap_key] = embedding
         intermed_dict = self.projector.map(intermed_dict)
@@ -84,13 +91,32 @@ class DexedStatistics(Leaf):
         projection[np.random.randint(0, shape[0])] = 1
         return projection
 
-    def _calc_static_statistics(self, array: np.ndarray) -> np.ndarray:
+    def _calc_static_statistics(self, array: np.ndarray, silence_sink: bool = False) -> np.ndarray:
         peak = float(np.abs(array).max())
         if peak < 1e-4:
             # Silent/near-silent render (common with random raw Dexed presets, unlike the human
             # dataset which is never this quiet) -- both ACTM and ttb are unreliable below this
             # amplitude; fall back to a zero embedding instead of crashing the loop.
-            return np.zeros(N_Z_FEATURES, dtype=np.float32)
+            if not silence_sink:
+                return np.zeros(N_Z_FEATURES, dtype=np.float32)
+            # silence_sink=True: every silent render used to collapse onto the exact same
+            # all-zeros point -- literally identical regardless of which of many different
+            # silent presets produced it. Investigation notebook section 16 found this turns
+            # into a "silence attractor": that single shared point becomes an outsized target
+            # for IMGEP's 1-NN search (many discoveries piled on it -> high odds of being the
+            # nearest match to any goal sampled nearby), and locally mutating an already-silent
+            # preset is disproportionately likely to still be silent, so the search gets stuck
+            # revisiting/re-mutating that same spot instead of exploring.
+            #
+            # Fix: send each silent render to a distinct point far outside the normally-explored
+            # region instead. A flat +1e6 offset (not a relative/multiplicative one) is "far" in
+            # every dimension regardless of that dimension's natural physical scale (Hz-scale
+            # spectral features vs 0-1-scale ratios alike), and a per-preset deterministic jitter
+            # (seeded from the raw audio itself, so silence-sink points are still reproducible)
+            # keeps different silent presets from re-colliding onto one new shared point, which
+            # would just recreate the same problem one location over.
+            jitter_rng = np.random.default_rng(abs(hash(array.tobytes())) % (2**32))
+            return (1e6 + jitter_rng.normal(0.0, 1.0, N_Z_FEATURES)).astype(np.float32)
         # Peak-normalize before feature extraction (both ACTM and ttb): raw random presets span
         # a much wider loudness range than the human dataset. This deliberately differs from
         # ttb's MATLAB-matching default of never normalizing internally (see ttb_extractor.py) --
