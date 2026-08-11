@@ -42,15 +42,15 @@ def load_z_chronological(discoveries_dir, cap=None):
 print('loading baseline/algomut seeds (0-19, 200 iter each, chronological order)...')
 baseline_runs, algomut_runs = [], []
 for seed in range(20):
-    b_dir = 'baseline_seed0_true/discoveries' if seed == 0 else (
-        f'run_2000_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/baseline/seed{seed}/discoveries')
-    a_dir = 'sweep_algomut/discoveries' if seed == 0 else (
-        f'sweep_algomut_seed{seed}/discoveries' if seed in (1, 2) else f'coverage/algomut/seed{seed}/discoveries')
+    b_dir = 'runs/multiseed/baseline_seed0_true/discoveries' if seed == 0 else (
+        f'runs/multiseed/seed{seed}/discoveries' if seed in (1, 2) else f'runs/coverage/baseline/seed{seed}/discoveries')
+    a_dir = 'runs/algomut/seed0/discoveries' if seed == 0 else (
+        f'runs/algomut/seed{seed}/discoveries' if seed in (1, 2) else f'runs/coverage/algomut/seed{seed}/discoveries')
     baseline_runs.append(load_z_chronological(b_dir, cap=N_ITER))
     algomut_runs.append(load_z_chronological(a_dir, cap=N_ITER))
 
 print('loading random pool...')
-random_pool = load_z_chronological('random_2000_combined/discoveries')
+random_pool = load_z_chronological('runs/random/combined/discoveries')
 
 # Drop NaN rows (a handful of degenerate presets) -- keep chronological order within each run
 def drop_nan_keep_order(M):

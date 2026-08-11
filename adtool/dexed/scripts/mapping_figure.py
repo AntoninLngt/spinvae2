@@ -83,8 +83,8 @@ def make_figure(method):
     rng = np.random.default_rng(SEED)
 
     print(f'[{method}] loading discoveries...')
-    theta_imgep, z_imgep = load_theta_z('run_2000_v2/discoveries')
-    theta_rs, z_rs = load_theta_z('random_2000_combined/discoveries')
+    theta_imgep, z_imgep = load_theta_z('runs/main/discoveries')
+    theta_rs, z_rs = load_theta_z('runs/random/combined/discoveries')
 
     for name in ('imgep', 'rs'):
         theta, z = (theta_imgep, z_imgep) if name == 'imgep' else (theta_rs, z_rs)

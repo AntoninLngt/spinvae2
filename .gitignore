@@ -47,17 +47,8 @@ venv/
 synth/surge_patches_list.json
 
 # adtool IMGEP run outputs (experiment data, not code)
-adtool/dexed/run_*/
-adtool/dexed/sweep_*/
-adtool/dexed/baseline_*/
-adtool/dexed/coverage/
-adtool/dexed/random_*/
-adtool/dexed/human_baseline/
-adtool/dexed/test_run/
-adtool/dexed/discoveries/
-adtool/dexed/checkpoints/
+adtool/dexed/runs/
 adtool/dexed/__pycache__/
-adtool/dexed/analysis_runs/
 adtool/dexed/*.log
 adtool/dexed/logs/
 
