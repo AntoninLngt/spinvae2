@@ -49,6 +49,8 @@ class DexedParameterMap(Leaf):
         big_jump_prob: float = 0.0,
         big_jump_scale: float = 8.0,
         random_reset_prob: float = 0.0,
+        explore_indices: List[int] = None,
+        base_preset_seed: int = 0,
         **config_decorator_kwargs,
     ):
         super().__init__()
@@ -87,6 +89,28 @@ class DexedParameterMap(Leaf):
         self.random_reset_prob = random_reset_prob
         self._rng_counter = 0
         self.learnable_indices = [i for i in range(self.N_VST_PARAMS) if i not in self.FIXED_INDICES]
+        # Restricts exploration to a subset of the 144 learnable parameters: every other
+        # parameter is frozen to a fixed base preset for the whole run, so the search moves in a
+        # low-dimensional subspace instead of all 144 dimensions at once. Default None keeps the
+        # original behaviour (all 144 explored).
+        #
+        # Motivation: every diversity result so far was obtained in the full 144-D space, where
+        # local mutation may simply be lost. Shrinking the problem to a handful of the
+        # timbrally-decisive FM parameters (algorithm, feedback, per-operator output levels and
+        # frequency ratios) tests whether goal-directed exploration works *at all* on this
+        # synthesiser, before blaming the operator; the subspace can then be grown back.
+        self.explore_indices = list(explore_indices) if explore_indices is not None else None
+        if self.explore_indices is not None:
+            invalid = [i for i in self.explore_indices if i in self.FIXED_INDICES]
+            if invalid:
+                raise ValueError(
+                    f"explore_indices contains non-learnable (structurally fixed) indices: {invalid}"
+                )
+        # The frozen parameters need plausible values, not zeros: a preset with every envelope
+        # and output level at zero is silent regardless of what the explored subset does. One
+        # seeded random draw gives a reproducible, self-consistent starting point.
+        self.base_preset_seed = base_preset_seed
+        self._base_preset_values = None
         self._dexed_helper_instance = None
 
     @property
@@ -121,10 +145,30 @@ class DexedParameterMap(Leaf):
             intermed_dict[self.premap_key] = self.sample()
         return intermed_dict
 
+    @property
+    def _base_preset(self) -> List[float]:
+        """ Values the non-explored parameters are frozen to when explore_indices is set.
+        Built lazily (and rebuilt after a checkpoint restore, which bypasses __init__ -- same
+        constraint as _dexed_helper). """
+        if self._base_preset_values is None:
+            preset = self._dexed_helper.get_random_preset(seed=self.base_preset_seed)
+            self._base_preset_values = [float(v) for _, v in self._apply_defaults(preset)]
+        return self._base_preset_values
+
+    def _apply_explore_restriction(self, preset: List) -> List:
+        """ Freezes every learnable parameter outside explore_indices to the base preset. """
+        if self.explore_indices is None:
+            return preset
+        explored = set(self.explore_indices)
+        base = self._base_preset
+        return [(i, v if (i in explored or i in self.FIXED_INDICES) else base[i])
+                for i, v in preset]
+
     def sample(self) -> Dict:
         self._rng_counter += 1
         preset = self._dexed_helper.get_random_preset(seed=self.seed + self._rng_counter)
         preset = self._apply_defaults(preset)
+        preset = self._apply_explore_restriction(preset)
         return {"dynamic_params": {"preset": preset}}
 
     def mutate(self, parameter_dict: Dict) -> Dict:
@@ -139,10 +183,15 @@ class DexedParameterMap(Leaf):
         preset_list = intermed_dict["dynamic_params"]["preset"]
 
         preset_array = np.array([v for _, v in preset_list], dtype=float)
+        # With explore_indices set, only that subset is perturbed; the restriction is also
+        # re-applied after the call, since get_similar_preset() may touch the algorithm index
+        # independently of the indices it is given.
+        mutable_indices = (self.explore_indices if self.explore_indices is not None
+                           else self.learnable_indices)
         # variation>=2 in get_similar_preset() applies random noise to (most of) the learnable
         # parameters -- variation=1 would only change the algorithm, variation=0 is a no-op.
         mutated_array = Dexed.get_similar_preset(
-            preset_array, variation=2, learnable_indices=self.learnable_indices,
+            preset_array, variation=2, learnable_indices=mutable_indices,
             random_seed=self.seed + self._rng_counter, noise_scale=self.noise_scale,
             op_mode_mutation_prob=self.op_mode_mutation_prob,
             reflect_boundary=getattr(self, "reflect_boundary", False),
@@ -152,6 +201,7 @@ class DexedParameterMap(Leaf):
         )
         mutated_preset = [(i, float(v)) for i, v in enumerate(mutated_array)]
         mutated_preset = self._apply_defaults(mutated_preset)
+        mutated_preset = self._apply_explore_restriction(mutated_preset)
 
         intermed_dict["dynamic_params"]["preset"] = mutated_preset
         return intermed_dict
