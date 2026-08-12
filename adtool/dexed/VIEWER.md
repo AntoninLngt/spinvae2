@@ -7,18 +7,21 @@ l'investigation (silence, phase bootstrap/guidee) directement colorables sur les
 
 ## Lancer
 
-Depuis `~/projects/spinvae2/adtool/dexed` :
+Exemple directement copiable — remplacer le chemin du run par un de ceux listes plus bas :
 
 ```bash
+cd ~/projects/spinvae2/adtool/dexed
 LD_LIBRARY_PATH=/data/anasynth_nonbp/manaconda3/lib \
 /data/anasynth_nonbp/longeot/envs/spinvae_2_18_env/bin/python3 \
   -m adtool.user_tools.visu.server \
-  --discoveries runs/<CHEMIN_DU_RUN>/discoveries \
-  --config_file configs/visu_analysis.json \
-  --refresh
+  --discoveries runs/bigboot/bs2000_seed0/discoveries \
+  --config_file configs/visu_analysis.json
 ```
 
-Puis ouvrir **<http://127.0.0.1:8765/>**
+Puis ouvrir **http://127.0.0.1:8765/**
+
+Ne pas ecrire le chemin entre chevrons : bash interprete `<...>` comme une redirection, et
+la commande echoue avec `Aucun fichier ou dossier de ce type`.
 
 - `--config_file` charge les analyses (voir plus bas). Sans lui, la carte s'affiche mais
   sans les filtres silence/bootstrap.
