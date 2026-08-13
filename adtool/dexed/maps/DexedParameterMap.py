@@ -35,6 +35,21 @@ class DexedParameterMap(Leaf):
     # the 6 operator on/off switches (44, 66, 88, 110, 132, 154) -- these are forced to fixed
     # values by _apply_defaults() below rather than explored by IMGEP. 155 - 11 = 144 learnable.
     FIXED_INDICES = [0, 1, 2, 3, 13, 44, 66, 88, 110, 132, 154]
+    # Standard DX7 carrier table: which operators reach the output for each of the 32
+    # algorithms (1-indexed). Modulators only shape carriers -- an operator at full output
+    # level contributes nothing audible unless it is a carrier, which is why total operator
+    # energy is identical between silent and audible discoveries while carrier level is not.
+    CARRIERS = {
+        1: [1, 3], 2: [1, 3], 3: [1, 4], 4: [1, 4], 5: [1, 3, 5], 6: [1, 3, 5],
+        7: [1, 3], 8: [1, 3], 9: [1, 3], 10: [1, 4], 11: [1, 4], 12: [1, 3],
+        13: [1, 3], 14: [1, 3], 15: [1, 3], 16: [1], 17: [1], 18: [1],
+        19: [1, 4, 5], 20: [1, 2, 4], 21: [1, 2, 4, 5], 22: [1, 3, 4, 5],
+        23: [1, 2, 4, 5], 24: [1, 2, 3, 4, 5], 25: [1, 2, 3, 4, 5], 26: [1, 2, 4],
+        27: [1, 2, 4], 28: [1, 3, 6], 29: [1, 2, 3, 5], 30: [1, 2, 3, 5],
+        31: [1, 2, 3, 4, 5], 32: [1, 2, 3, 4, 5, 6],
+    }
+    ALGORITHM_IDX = 4
+    OP_OUTPUT_LEVEL_IDX = [23 + 22 * op + 8 for op in range(6)]  # OP1..OP6 OUTPUT LEVEL
     FIXED_DEFAULTS = {0: 1.0, 1: 0.0, 2: 1.0, 3: 0.5, 13: 0.5,
                        44: 1.0, 66: 1.0, 88: 1.0, 110: 1.0, 132: 1.0, 154: 1.0}
 
@@ -53,6 +68,9 @@ class DexedParameterMap(Leaf):
         explore_indices: List[int] = None,
         base_preset_seed: int = 0,
         base_preset_mode: str = "random",
+        carrier_floor: float = 0.0,
+        logit_mutation: bool = False,
+        logit_sigma: float = 0.75,
         **config_decorator_kwargs,
     ):
         super().__init__()
@@ -124,6 +142,20 @@ class DexedParameterMap(Leaf):
         self.base_preset_seed = base_preset_seed
         self.base_preset_mode = base_preset_mode
         self._base_preset_values = None
+        # Guarantees at least one CARRIER keeps an output level above this value. Silence is
+        # governed by the carriers' output level, not by total operator energy: measured on
+        # random sampling, max-carrier level in [0.6,1.0] gives 3% silence, [0.4,0.6] gives 25%,
+        # [0.2,0.4] gives 53%. Local mutation regresses every parameter toward the middle of
+        # [0,1], parking carriers at ~0.53 (the danger zone) where uniform sampling keeps them
+        # at ~0.85. Default 0.0 disables the constraint.
+        self.carrier_floor = carrier_floor
+        # Mutates in logit space (noise added to log(p/(1-p)), then mapped back through the
+        # sigmoid) instead of adding Gaussian noise directly in [0,1] and clipping. Clipped
+        # Gaussian walks concentrate toward 0.5; in logit space the step is relative to the
+        # current position, so a parameter near an extreme keeps making proportionally small
+        # moves instead of being dragged to the centre. Default False keeps the original path.
+        self.logit_mutation = logit_mutation
+        self.logit_sigma = logit_sigma
         self._dexed_helper_instance = None
 
     @property
@@ -191,6 +223,8 @@ class DexedParameterMap(Leaf):
         preset = self._dexed_helper.get_random_preset(seed=self.seed + self._rng_counter)
         preset = self._apply_defaults(preset)
         preset = self._apply_explore_restriction(preset)
+        if self.carrier_floor > 0.0:
+            preset = self._apply_carrier_floor(preset)
         return {"dynamic_params": {"preset": preset}}
 
     def mutate(self, parameter_dict: Dict) -> Dict:
@@ -212,6 +246,17 @@ class DexedParameterMap(Leaf):
                            else self.learnable_indices)
         # variation>=2 in get_similar_preset() applies random noise to (most of) the learnable
         # parameters -- variation=1 would only change the algorithm, variation=0 is a no-op.
+        if self.logit_mutation:
+            decision_rng = np.random.default_rng(self.seed + 777777777 + self._rng_counter)
+            mutated_array = self._logit_mutate(preset_array, decision_rng)
+            mutated_preset = [(i, float(v)) for i, v in enumerate(mutated_array)]
+            mutated_preset = self._apply_defaults(mutated_preset)
+            mutated_preset = self._apply_explore_restriction(mutated_preset)
+            if self.carrier_floor > 0.0:
+                mutated_preset = self._apply_carrier_floor(mutated_preset)
+            intermed_dict["dynamic_params"]["preset"] = mutated_preset
+            return intermed_dict
+
         mutated_array = Dexed.get_similar_preset(
             preset_array, variation=2, learnable_indices=mutable_indices,
             random_seed=self.seed + self._rng_counter, noise_scale=self.noise_scale,
@@ -224,9 +269,50 @@ class DexedParameterMap(Leaf):
         mutated_preset = [(i, float(v)) for i, v in enumerate(mutated_array)]
         mutated_preset = self._apply_defaults(mutated_preset)
         mutated_preset = self._apply_explore_restriction(mutated_preset)
+        if self.carrier_floor > 0.0:
+            mutated_preset = self._apply_carrier_floor(mutated_preset)
 
         intermed_dict["dynamic_params"]["preset"] = mutated_preset
         return intermed_dict
+
+    def _logit_mutate(self, preset_array: np.ndarray, rng) -> np.ndarray:
+        """Adds Gaussian noise in logit space, then maps back through the sigmoid.
+
+        A clipped Gaussian walk in [0,1] has a stationary distribution concentrated around 0.5,
+        which is exactly the failure mode measured here: carrier output levels park at ~0.53
+        (25-50% silence) where uniform sampling keeps them at ~0.85 (3% silence). In logit space
+        the boundaries are at +/-infinity, so the walk has no centre to collapse onto and the
+        step size is relative to the current value.
+        """
+        idx = np.array(self.explore_indices if self.explore_indices is not None
+                        else self.learnable_indices, dtype=int)
+        p = np.clip(preset_array[idx], 1e-4, 1 - 1e-4)
+        logit = np.log(p / (1.0 - p))
+        logit = logit + rng.normal(0.0, self.logit_sigma * self.noise_scale, size=logit.shape)
+        out = preset_array.copy()
+        out[idx] = 1.0 / (1.0 + np.exp(-logit))
+        return out
+
+    def _apply_carrier_floor(self, preset: List) -> List:
+        """Guarantees at least one carrier stays audible.
+
+        Which operators are carriers depends on the algorithm, so this is resolved per preset.
+        Only the single loudest carrier is raised (to carrier_floor), leaving the timbre
+        otherwise untouched -- the goal is to keep the preset out of the silent region, not to
+        force it loud.
+        """
+        values = dict(preset)
+        algo_norm = values.get(self.ALGORITHM_IDX, 0.0)
+        algo = int(round(1 + float(algo_norm) * 31))
+        carriers = self.CARRIERS.get(max(1, min(32, algo)), [1])
+        carrier_idx = [self.OP_OUTPUT_LEVEL_IDX[op - 1] for op in carriers]
+        levels = [(i, float(values.get(i, 0.0))) for i in carrier_idx]
+        if not levels:
+            return preset
+        best_i, best_v = max(levels, key=lambda t: t[1])
+        if best_v >= self.carrier_floor:
+            return preset
+        return [(i, self.carrier_floor if i == best_i else v) for i, v in preset]
 
     def _apply_defaults(self, preset: List) -> List:
         """ Forces the fixed (non-learnable) parameters to spinvae2's default values, so IMGEP
