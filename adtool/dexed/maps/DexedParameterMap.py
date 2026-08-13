@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import sys
@@ -51,6 +52,7 @@ class DexedParameterMap(Leaf):
         random_reset_prob: float = 0.0,
         explore_indices: List[int] = None,
         base_preset_seed: int = 0,
+        base_preset_mode: str = "random",
         **config_decorator_kwargs,
     ):
         super().__init__()
@@ -107,9 +109,20 @@ class DexedParameterMap(Leaf):
                     f"explore_indices contains non-learnable (structurally fixed) indices: {invalid}"
                 )
         # The frozen parameters need plausible values, not zeros: a preset with every envelope
-        # and output level at zero is silent regardless of what the explored subset does. One
-        # seeded random draw gives a reproducible, self-consistent starting point.
+        # and output level at zero is silent regardless of what the explored subset does.
+        # "random" (default): one seeded draw of Dexed.get_random_preset -- reproducible, but a
+        # single draw can land unluckily (e.g. an operator's own EG_LEVEL_1 at exactly 0.0 mutes
+        # it regardless of its explored OUTPUT LEVEL, observed on runs/restricted/L1_core14 with
+        # base_preset_seed=0, where OP2 and OP5 both had EG_LEVEL_1==0.0).
+        # "human_median": the real human preset closest (L2, on the 144 learnable dims) to the
+        # coordinate-wise median of the full 30,145-preset human database -- guaranteed to be a
+        # normal, audible, working sound (no operator pinned to a degenerate extreme), unlike a
+        # single synthetic random draw. Precomputed once by scripts/find_median_human_preset.py
+        # into configs/restricted/human_median_base_preset.json (UID 4661, "STR JB 01").
+        if base_preset_mode not in ("random", "human_median"):
+            raise ValueError(f"base_preset_mode must be 'random' or 'human_median', got {base_preset_mode!r}")
         self.base_preset_seed = base_preset_seed
+        self.base_preset_mode = base_preset_mode
         self._base_preset_values = None
         self._dexed_helper_instance = None
 
@@ -151,7 +164,16 @@ class DexedParameterMap(Leaf):
         Built lazily (and rebuilt after a checkpoint restore, which bypasses __init__ -- same
         constraint as _dexed_helper). """
         if self._base_preset_values is None:
-            preset = self._dexed_helper.get_random_preset(seed=self.base_preset_seed)
+            if self.base_preset_mode == "human_median":
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "configs", "restricted", "human_median_base_preset.json",
+                )
+                with open(json_path) as f:
+                    full_155 = json.load(f)["full_155_values"]
+                preset = list(enumerate(full_155))
+            else:
+                preset = self._dexed_helper.get_random_preset(seed=self.base_preset_seed)
             self._base_preset_values = [float(v) for _, v in self._apply_defaults(preset)]
         return self._base_preset_values
 
