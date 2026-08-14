@@ -1,12 +1,15 @@
 """Variant of mapping_figure.py: UMAP is fit ONCE on the full human corpus (all presets, not
 subsampled -- so its shape is faithful to spinvae2/notebooks/dexed_audit_TT_ACTM_ttb.ipynb),
-then IMGEP and Random are projected into that SAME learned embedding via reducer.transform()
+then `full` and Random are projected into that SAME learned embedding via reducer.transform()
 (the exact pattern already used in imgep_coverage_vs_human_baseline.ipynb). Answers a
 different question than mapping_figure.py's joint fit: not "how do the three compare on a
-shared map fit on all of them", but "where do IMGEP/Random discoveries fall relative to the
-human corpus's own, already-known geometry".
+shared map fit on all of them", but "where do full/Random discoveries fall relative to the
+human corpus's own, already-known geometry". `full` (runs/confirm/full/seed0) replaces the
+original IMGEP baseline (runs/main/discoveries) now that it is the reference configuration
+throughout the investigation.
 
-t-SNE has no out-of-sample transform in scikit-learn, so this variant is UMAP-only.
+t-SNE has no out-of-sample transform in scikit-learn (and openTSNE, which does, is not
+installed) -- this variant stays UMAP-only, matching the original design.
 HDBSCAN clustering (for the Theta<->Z colour coding) is still computed independently in
 native 38D per dataset, same as mapping_figure.py -- unaffected by the projection choice.
 """
@@ -66,14 +69,15 @@ def main():
     rng = np.random.default_rng(SEED)
 
     print('loading discoveries...')
-    theta_imgep, z_imgep = load_theta_z('runs/main/discoveries')
+    theta_full, z_full = load_theta_z('runs/confirm/full/seed0/discoveries')
     theta_rs, z_rs = load_theta_z('runs/random/combined/discoveries')
-    for name in ('imgep', 'rs'):
-        theta, z = (theta_imgep, z_imgep) if name == 'imgep' else (theta_rs, z_rs)
+    for name in ('full', 'rs'):
+        theta, z = (theta_full, z_full) if name == 'full' else (theta_rs, z_rs)
         keep = ~np.isnan(z).any(axis=1)
-        idx = rng.choice(np.where(keep)[0], N_DISCOVERIES, replace=False)
-        if name == 'imgep':
-            theta_imgep, z_imgep = theta[idx], z[idx]
+        n = min(N_DISCOVERIES, keep.sum())
+        idx = rng.choice(np.where(keep)[0], n, replace=False)
+        if name == 'full':
+            theta_full, z_full = theta[idx], z[idx]
         else:
             theta_rs, z_rs = theta[idx], z[idx]
 
@@ -95,41 +99,45 @@ def main():
     # z-score using the human corpus alone as reference (it is the one UMAP is fit on)
     mu, sigma = z_human.mean(axis=0), z_human.std(axis=0)
     sigma[sigma == 0] = 1.0
-    zn_human, zn_imgep, zn_rs = (z_human - mu) / sigma, (z_imgep - mu) / sigma, (z_rs - mu) / sigma
+    zn_human, zn_full, zn_rs = (z_human - mu) / sigma, (z_full - mu) / sigma, (z_rs - mu) / sigma
 
     print('clustering (HDBSCAN, native 38D z-scored, per dataset)...')
     def cluster(Z, min_cluster_size, min_samples):
-        # min_cluster_size/min_samples tuned PER DATASET (2026-08-10), not globally: IMGEP and
-        # Random need min_cluster_size=15/min_samples=5 or Random explodes into 20+ spurious
-        # clusters (its 1000 points are spread thin across the space). But that same config,
-        # applied to the human 1000-point subsample below, produces 87% noise -- subsampling
-        # 1000/30142 from an already-compact corpus leaves that subsample locally sparse in a way
-        # the full corpus isn't, so a "15 points within eps, 5 as core" density threshold is far
-        # too strict there; min_cluster_size=10/min_samples=1 was needed. No single config was
-        # found that works for all three (see investigation notebook 4.2/4.3 for the grid search)
-        # -- this is a genuine density mismatch between datasets, not a bug to hide behind one
-        # global default.
+        # min_cluster_size/min_samples tuned PER DATASET, not globally -- a genuine density
+        # mismatch between datasets (Human = one compact blob, Random = spread thin, full
+        # somewhere in between), not a bug to hide behind one global default (see investigation
+        # notebook 4.2/4.3 and scratchpad/tune_hdbscan_humanfit.py for the grid search).
+        # RETUNED 2026-08-14: the original config (15/5 for full & Random, 10/1 for Human) left
+        # `full` at 36.5% noise once it was swapped in for the old IMGEP baseline -- a config
+        # tuned for the baseline's distribution, not full's. min_cluster_size=5/min_samples=1
+        # roughly halves noise on all three AND increases cluster count on all three (full:
+        # 4->7 clusters/36.5%->16.3% noise; Human: 3->5/13.1%->7.1%); Random alone keeps its
+        # original config (15/5, eps=0.1) since min_cluster_size=5 makes it explode into 100+
+        # spurious micro-clusters (its 1000 points are spread thin across the space) -- more
+        # clusters there is fragmentation, not more structure.
         return hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples,
                                 cluster_selection_epsilon=0.0).fit_predict(Z)
-    labels_imgep, labels_rs = cluster(zn_imgep, 15, 5), cluster(zn_rs, 15, 5)
+    labels_full = cluster(zn_full, 5, 1)
+    labels_rs = hdbscan.HDBSCAN(min_cluster_size=15, min_samples=1,
+                                 cluster_selection_epsilon=0.1).fit_predict(zn_rs)
     # human corpus is large -- HDBSCAN on 30k points is slow with these settings, subsample for
     # the colour-coding only (does not affect the UMAP fit, which stays on the full corpus)
     human_sub_idx = rng.choice(len(zn_human), N_DISCOVERIES, replace=False)
-    labels_human = cluster(zn_human[human_sub_idx], 10, 1)
-    for name, labels in [('IMGEP', labels_imgep), ('Random', labels_rs), ('Human (n=1000 subset)', labels_human)]:
+    labels_human = cluster(zn_human[human_sub_idx], 5, 1)
+    for name, labels in [('full', labels_full), ('Random', labels_rs), ('Human (n=1000 subset)', labels_human)]:
         print(f'  {name}: {labels.max() + 1} clusters, {np.sum(labels < 0)} noise pts')
 
-    print('fitting UMAP on Theta (human corpus, full), transforming IMGEP/Random...')
+    print('fitting UMAP on Theta (human corpus, full), transforming full/Random...')
     reducer_theta = umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=SEED)
     ti_human_full = reducer_theta.fit_transform(theta_human)
-    ti_imgep = reducer_theta.transform(theta_imgep)
+    ti_full = reducer_theta.transform(theta_full)
     ti_rs = reducer_theta.transform(theta_rs)
     ti_human = ti_human_full[human_sub_idx]
 
-    print('fitting UMAP on Z (human corpus, full, z-scored), transforming IMGEP/Random...')
+    print('fitting UMAP on Z (human corpus, full, z-scored), transforming full/Random...')
     reducer_z = umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=SEED)
     zi_human_full = reducer_z.fit_transform(zn_human)
-    zi_imgep = reducer_z.transform(zn_imgep)
+    zi_full = reducer_z.transform(zn_full)
     zi_rs = reducer_z.transform(zn_rs)
     zi_human = zi_human_full[human_sub_idx]
 
@@ -140,14 +148,14 @@ def main():
 
     fig = Figure(figsize=(11, 15), dpi=130)
     axes = fig.subplots(3, 2)
-    rows = [('(a) Curiosity search (IMGEP)', labels_imgep, ti_imgep, zi_imgep),
+    rows = [('(a) Curiosity search (full)', labels_full, ti_full, zi_full),
             ('(b) Random search', labels_rs, ti_rs, zi_rs),
             ('(c) Human preset corpus (n=1000 of 30145)', labels_human, ti_human, zi_human)]
 
-    # bounds/eps from the FULL human embedding, since IMGEP/Random are transformed into it
+    # bounds/eps from the FULL human embedding, since full/Random are transformed into it
     # (they may fall outside its convex hull -- that is itself an informative signal)
-    all_theta = np.concatenate([ti_human_full, ti_imgep, ti_rs])
-    all_z = np.concatenate([zi_human_full, zi_imgep, zi_rs])
+    all_theta = np.concatenate([ti_human_full, ti_full, ti_rs])
+    all_z = np.concatenate([zi_human_full, zi_full, zi_rs])
     eps_theta = 0.015 * (all_theta.max() - all_theta.min())
     eps_z = 0.015 * (all_z.max() - all_z.min())
 
@@ -176,8 +184,8 @@ def main():
             ax.set_facecolor(bg)
             ax.set_xticks([]); ax.set_yticks([])
 
-    fig.suptitle('Where do IMGEP / Random discoveries fall in the human corpus\'s own map?\n'
-                 '(UMAP fit on the full 30145-preset human corpus; IMGEP/Random projected in via '
+    fig.suptitle('Where do full / Random discoveries fall in the human corpus\'s own map?\n'
+                 '(UMAP fit on the full 30145-preset human corpus; full/Random projected in via '
                  '.transform(); light grey = full human corpus backdrop; HDBSCAN clusters in native 38D)',
                  fontsize=10.5)
     fig.tight_layout(rect=[0, 0, 1, 0.95])

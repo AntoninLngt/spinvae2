@@ -91,6 +91,7 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         niche_curiosity_decay: float = 1.0,
         niche_curiosity_min: float = 1.0,
         grid_fit_path: str = DEFAULT_GRID_FIT_PATH,
+        filter_degenerate_parents: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -100,6 +101,13 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         self.niche_curiosity_decay = niche_curiosity_decay
         self.niche_curiosity_min = niche_curiosity_min
         self.grid_fit_path = grid_fit_path
+        # Excludes degenerate (silent) discoveries from being selected as mutation parents, with
+        # a fresh random draw as the escape hatch when every candidate is degenerate. Default
+        # False keeps the stock behaviour. Independent of niche_curiosity_bias: the two address
+        # different failure modes (this one, the silence lock-in; the bias, the premature
+        # freezing of coverage) and can be enabled separately or together.
+        self.filter_degenerate_parents = filter_degenerate_parents
+        self._degenerate_escape_count = 0
         self._niche_tracker = None
         self._niche_counts_checkpoint = None
 
@@ -156,11 +164,30 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         self.timestep += 1
         return trial_data_reset
 
+    @staticmethod
+    def _is_degenerate(feature: np.ndarray) -> bool:
+        """A discovery whose descriptor carries no usable behaviour, and which must never be
+        mutated as a parent.
+
+        Two cases, both produced by DexedStatistics._calc_static_statistics:
+          - the all-zeros fallback returned for any render with peak < 1e-4 (every silent
+            render collapses onto this one point, which is exactly what turns it into a
+            nearest-neighbour attractor -- see investigation notebook section 16);
+          - the +1e6 out-of-band marker used when silence_sink is enabled.
+        """
+        f = np.asarray(feature, dtype=float)
+        if f.size == 0:
+            return True
+        return bool(np.abs(f).max() < 1e-9 or (np.abs(f) > 1e4).any())
+
     def _vector_search_for_goal(self, goal: np.ndarray, history_lookback_length: int) -> Dict:
         tracker = self.niche_tracker
-        if tracker is None:
+        if tracker is None and not self.filter_degenerate_parents:
             return super()._vector_search_for_goal(goal, history_lookback_length)
 
+        # Retrieving k>1 is required by both mechanisms: the niche bias needs alternatives to
+        # weight between, and the filter needs alternatives to fall back on once degenerate
+        # candidates are removed.
         matches = self.history.nearest(
             np.asarray(goal, dtype=float),
             k=self.niche_curiosity_k,
@@ -169,6 +196,25 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         if not matches:
             match = self.history.random(history_lookback_length=history_lookback_length)
             return match.payload if match else self.parameter_map.sample()
+
+        if self.filter_degenerate_parents:
+            viable = [m for m in matches if not self._is_degenerate(m.feature)]
+            if not viable:
+                # Every candidate is degenerate: this is the trap that locks the search into
+                # silence for the rest of the run (100% of goal-directed steps on restricted
+                # subspaces, 54-67% on the full space). Local mutation cannot escape it, since
+                # mutating a silent preset almost always yields another silent preset -- so the
+                # only way out is a fresh unconditioned draw. Unlike NRAB's random_reset_prob,
+                # which fires with a fixed probability whether or not the search is stuck, this
+                # triggers exactly when there is nothing viable left to mutate.
+                self._degenerate_escape_count = getattr(self, "_degenerate_escape_count", 0) + 1
+                return self.parameter_map.sample()
+            matches = viable
+
+        if tracker is None:
+            # Filter without niche bias: keep the stock 1-NN semantics among viable candidates
+            # (history.nearest returns them sorted by increasing distance).
+            return matches[0].payload
 
         weights = np.array(
             [tracker.curiosity(tracker.cell_of(m.feature)) for m in matches],
@@ -202,6 +248,7 @@ class NicheBiasedIMGEPConfig(IMGEPConfig):
     niche_curiosity_decay: float = Field(1.0, ge=0.0)
     niche_curiosity_min: float = Field(1.0, gt=0.0)
     grid_fit_path: str = Field(DEFAULT_GRID_FIT_PATH)
+    filter_degenerate_parents: bool = Field(False)
 
 
 @expose
@@ -228,6 +275,7 @@ class NicheBiasedIMGEPExplorer:
             niche_curiosity_decay=self.config.niche_curiosity_decay,
             niche_curiosity_min=self.config.niche_curiosity_min,
             grid_fit_path=self.config.grid_fit_path,
+            filter_degenerate_parents=self.config.filter_degenerate_parents,
         )
         return explorer
 

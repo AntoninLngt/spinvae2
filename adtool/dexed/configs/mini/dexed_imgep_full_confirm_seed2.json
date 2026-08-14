@@ -1,0 +1,61 @@
+{
+    "experiment": {
+        "config": {
+            "save_location": "./runs/confirm/full/seed2/",
+            "save_frequency": 100,
+            "bootstrap_size": 100,
+            "discoveries_cache_size": -1
+        }
+    },
+    "system": {
+        "path": "systems.Dexed.DexedSimulation",
+        "config": {
+            "output_Fs": 16000,
+            "midi_note_duration_s": 3.0,
+            "render_duration_s": 4.0,
+            "midi_pitch": 56,
+            "midi_velocity": 75
+        }
+    },
+    "explorer": {
+        "path": "explorers.NicheBiasedIMGEPExplorer.NicheBiasedIMGEPExplorer",
+        "config": {
+            "mutator": {
+                "path": "adtool.mutators.SpecificMutator",
+                "config": {}
+            },
+            "equil_time": 1,
+            "niche_curiosity_bias": true,
+            "niche_curiosity_k": 5,
+            "niche_curiosity_start": 10.0,
+            "niche_curiosity_decay": 1.0,
+            "niche_curiosity_min": 1.0,
+            "behavior_map": {
+                "path": "maps.DexedStatistics.DexedStatistics",
+                "config": {}
+            },
+            "parameter_map": {
+                "path": "maps.DexedParameterMap.DexedParameterMap",
+                "config": {
+                    "seed": 2,
+                    "noise_scale": 1.0,
+                    "logit_mutation": true,
+                    "carrier_floor": 0.7,
+                    "algorithm_mutation_prob": 0.2
+                }
+            },
+            "filter_degenerate_parents": true
+        }
+    },
+    "input_wrappers": [],
+    "output_representations": [],
+    "logger_handlers": [],
+    "callbacks": {
+        "on_discovery": [
+            {
+                "path": "adtool.callbacks.on_discovery_callbacks.save_discovery_on_disk.SaveDiscoveryOnDisk",
+                "config": {}
+            }
+        ]
+    }
+}

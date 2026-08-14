@@ -1,0 +1,51 @@
+{
+ "experiment": {
+  "config": {
+   "save_location": "./random_2000/",
+   "save_frequency": 100,
+   "bootstrap_size": 2000,
+   "discoveries_cache_size": -1
+  }
+ },
+ "system": {
+  "path": "systems.Dexed.DexedSimulation",
+  "config": {
+   "output_Fs": 16000,
+   "midi_note_duration_s": 3.0,
+   "render_duration_s": 4.0,
+   "midi_pitch": 56,
+   "midi_velocity": 75
+  }
+ },
+ "explorer": {
+  "path": "adtool.explorers.IMGEPExplorer.IMGEPExplorer",
+  "config": {
+   "mutator": {
+    "path": "adtool.mutators.SpecificMutator",
+    "config": {}
+   },
+   "equil_time": 1,
+   "behavior_map": {
+    "path": "maps.DexedStatistics.DexedStatistics",
+    "config": {}
+   },
+   "parameter_map": {
+    "path": "maps.DexedParameterMap.DexedParameterMap",
+    "config": {
+     "seed": 104000
+    }
+   }
+  }
+ },
+ "input_wrappers": [],
+ "output_representations": [],
+ "logger_handlers": [],
+ "callbacks": {
+  "on_discovery": [
+   {
+    "path": "adtool.callbacks.on_discovery_callbacks.save_discovery_on_disk.SaveDiscoveryOnDisk",
+    "config": {}
+   }
+  ]
+ }
+}

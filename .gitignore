@@ -60,3 +60,6 @@ hs_err_pid*.log
 
 # pre-DawDreamer-migration backup, kept locally for reference
 synth/dexed.py.renderman_backup
+
+# Frozen UMAP fit: 45 MB, regenerable via scripts/fit_projection.py
+adtool/dexed/figures/projection_fit.pickle
