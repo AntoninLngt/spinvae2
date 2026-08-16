@@ -56,12 +56,25 @@ class DexedStatistics(Leaf):
         premap_key: str = "output",
         postmap_key: str = "output",
         silence_sink: bool = False,
+        goal_sampling: str = "onehot",
+        note_like_goal_box: bool = False,
     ):
         super().__init__()
         self.locator = BlobLocator()
         self.premap_key = premap_key
         self.postmap_key = postmap_key
         self.sample_rate = system.output_Fs
+        # See sample(). Default kept at the historical value so that existing runs remain
+        # reproducible; "box" is what every other adtool behaviour map does and is what new
+        # experiments should use.
+        self.goal_sampling = goal_sampling
+        # When True, only note-like discoveries widen the goal box (see maps/notelike.py).
+        # Rationale: goals are drawn uniformly inside that box, and the box is stretched by
+        # whatever lands in it -- measured at up to 1e17 x the valid range on the fragile
+        # harmonic descriptors. Goals then point almost exclusively at coordinates no real
+        # sound occupies. Restricting the box to sounds that behave like notes keeps the
+        # goals inside reachable territory.
+        self.note_like_goal_box = note_like_goal_box
         # See _calc_static_statistics: default False keeps the original behaviour (every
         # silent/near-silent render collapses to the exact same all-zeros embedding). Set True
         # to scatter each one to a distinct, far-away point instead -- see investigation
@@ -82,10 +95,38 @@ class DexedStatistics(Leaf):
         embedding = self._calc_static_statistics(array, silence_sink=self.silence_sink)
 
         intermed_dict[self.postmap_key] = embedding
+        if self.note_like_goal_box and self.projector.low is not None:
+            from maps.notelike import is_note_like_one
+            if not is_note_like_one(embedding):
+                # Keep the projector's clamping/shape handling, but do not let this
+                # discovery move the bounds the goals are drawn from.
+                low, high = self.projector.low.copy(), self.projector.high.copy()
+                intermed_dict = self.projector.map(intermed_dict)
+                self.projector.low, self.projector.high = low, high
+                return intermed_dict
         intermed_dict = self.projector.map(intermed_dict)
         return intermed_dict
 
     def sample(self):
+        """Draws the goal that IMGEPExplorer searches the archive for.
+
+        'box' is what every other adtool behaviour map implements (MeanBehaviorMap,
+        IdentityBehaviorMap: `return self.projector.sample()`) -- a uniform draw inside the
+        bounding box of the behaviours observed so far.
+
+        'onehot' reproduces what this class did from its initial import until 2026-08-14: a
+        one-hot vector, i.e. one of only 38 possible goals for an entire run -- the canonical
+        basis vectors of the RAW descriptor space, whose axes span orders of magnitude
+        (Hz-scale spectral features next to 0-1 ratios). With 38 fixed targets the 1-NN search
+        returns the same few archive entries over and over, which is a candidate explanation
+        for the collapse observed exactly at the bootstrap boundary and for the coverage
+        plateau. Kept only so the earlier runs stay reproducible.
+        """
+        if self.goal_sampling == "box":
+            if self.projector.low is None or self.projector.high is None:
+                shape = self.projector.tensor_shape
+                return np.zeros(shape if shape is not None else (N_Z_FEATURES,))
+            return self.projector.sample()
         shape = self.projector.tensor_shape
         projection = np.zeros(shape)
         projection[np.random.randint(0, shape[0])] = 1

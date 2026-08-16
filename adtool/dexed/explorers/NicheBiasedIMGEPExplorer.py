@@ -92,6 +92,7 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         niche_curiosity_min: float = 1.0,
         grid_fit_path: str = DEFAULT_GRID_FIT_PATH,
         filter_degenerate_parents: bool = False,
+        filter_non_notelike_parents: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -107,6 +108,9 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
         # different failure modes (this one, the silence lock-in; the bias, the premature
         # freezing of coverage) and can be enabled separately or together.
         self.filter_degenerate_parents = filter_degenerate_parents
+        # Stronger than filter_degenerate_parents: rejects any parent whose temporal envelope
+        # is outside the human region, not only the all-zeros sentinel.
+        self.filter_non_notelike_parents = filter_non_notelike_parents
         self._degenerate_escape_count = 0
         self._niche_tracker = None
         self._niche_counts_checkpoint = None
@@ -180,9 +184,29 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
             return True
         return bool(np.abs(f).max() < 1e-9 or (np.abs(f) > 1e4).any())
 
+    @property
+    def _parent_filtering_enabled(self) -> bool:
+        """Whether any parent-rejection rule is active.
+
+        Both flags gate the SAME code path below, so this must test both: gating that path on
+        filter_degenerate_parents alone silently disabled filter_non_notelike_parents (the
+        instance attribute was set and never read), which voided two of the four conditions of
+        the 2026-08-15 note-like experiment.
+        """
+        return self.filter_degenerate_parents or self.filter_non_notelike_parents
+
+    def _is_rejected_parent(self, feature) -> bool:
+        """Whether this history entry may be mutated as a parent."""
+        if self._is_degenerate(feature):
+            return True
+        if self.filter_non_notelike_parents:
+            from maps.notelike import is_note_like_one
+            return not is_note_like_one(np.asarray(feature, dtype=float))
+        return False
+
     def _vector_search_for_goal(self, goal: np.ndarray, history_lookback_length: int) -> Dict:
         tracker = self.niche_tracker
-        if tracker is None and not self.filter_degenerate_parents:
+        if tracker is None and not self._parent_filtering_enabled:
             return super()._vector_search_for_goal(goal, history_lookback_length)
 
         # Retrieving k>1 is required by both mechanisms: the niche bias needs alternatives to
@@ -197,8 +221,8 @@ class NicheBiasedIMGEPExplorerInstance(IMGEPExplorerInstance):
             match = self.history.random(history_lookback_length=history_lookback_length)
             return match.payload if match else self.parameter_map.sample()
 
-        if self.filter_degenerate_parents:
-            viable = [m for m in matches if not self._is_degenerate(m.feature)]
+        if self._parent_filtering_enabled:
+            viable = [m for m in matches if not self._is_rejected_parent(m.feature)]
             if not viable:
                 # Every candidate is degenerate: this is the trap that locks the search into
                 # silence for the rest of the run (100% of goal-directed steps on restricted
@@ -249,6 +273,7 @@ class NicheBiasedIMGEPConfig(IMGEPConfig):
     niche_curiosity_min: float = Field(1.0, gt=0.0)
     grid_fit_path: str = Field(DEFAULT_GRID_FIT_PATH)
     filter_degenerate_parents: bool = Field(False)
+    filter_non_notelike_parents: bool = Field(False)
 
 
 @expose
@@ -276,6 +301,7 @@ class NicheBiasedIMGEPExplorer:
             niche_curiosity_min=self.config.niche_curiosity_min,
             grid_fit_path=self.config.grid_fit_path,
             filter_degenerate_parents=self.config.filter_degenerate_parents,
+            filter_non_notelike_parents=self.config.filter_non_notelike_parents,
         )
         return explorer
 

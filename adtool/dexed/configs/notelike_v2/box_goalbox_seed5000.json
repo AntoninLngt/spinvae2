@@ -1,0 +1,62 @@
+{
+ "experiment": {
+  "config": {
+   "save_location": "runs/notelike_v2/box_goalbox/seed5000",
+   "save_frequency": 50,
+   "bootstrap_size": 50,
+   "discoveries_cache_size": -1
+  }
+ },
+ "system": {
+  "path": "systems.Dexed.DexedSimulation",
+  "config": {
+   "output_Fs": 16000,
+   "midi_note_duration_s": 3.0,
+   "render_duration_s": 4.0,
+   "midi_pitch": 56,
+   "midi_velocity": 75
+  }
+ },
+ "explorer": {
+  "path": "explorers.NicheBiasedIMGEPExplorer.NicheBiasedIMGEPExplorer",
+  "config": {
+   "mutator": {
+    "path": "adtool.mutators.SpecificMutator",
+    "config": {}
+   },
+   "equil_time": 1,
+   "niche_curiosity_bias": false,
+   "niche_curiosity_k": 5,
+   "niche_curiosity_start": 10.0,
+   "niche_curiosity_decay": 1.0,
+   "niche_curiosity_min": 1.0,
+   "behavior_map": {
+    "path": "maps.DexedStatistics.DexedStatistics",
+    "config": {
+     "goal_sampling": "box",
+     "note_like_goal_box": true
+    }
+   },
+   "parameter_map": {
+    "path": "maps.DexedParameterMap.DexedParameterMap",
+    "config": {
+     "seed": 5000,
+     "noise_scale": 1.0
+    }
+   },
+   "filter_degenerate_parents": false,
+   "filter_non_notelike_parents": false
+  }
+ },
+ "input_wrappers": [],
+ "output_representations": [],
+ "logger_handlers": [],
+ "callbacks": {
+  "on_discovery": [
+   {
+    "path": "adtool.callbacks.on_discovery_callbacks.save_discovery_on_disk.SaveDiscoveryOnDisk",
+    "config": {}
+   }
+  ]
+ }
+}
